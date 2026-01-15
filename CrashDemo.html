@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crash Game Configurator & Demo</title>
+    
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- 引入 Babel 用來解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 自定義樣式調整 -->
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen overflow-hidden">
+
+    <div id="root" class="h-full"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- Icons ---
+        const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+        const IconTrash2 = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
+        const IconPlay = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
+        const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>;
+        const IconSave = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
+        const IconRefreshCw = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>;
+        const IconZap = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>;
+        const IconGamepad = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="15" y1="13" x2="15.01" y2="13"></line><line x1="18" y1="11" x2="18.01" y2="11"></line><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>;
+
+        // --- Chart Component ---
+        const GameChart = ({ data, gameState }) => {
+            if (!data || data.length === 0) return null;
+
+            const lastPoint = data[data.length - 1];
+            const maxLevel = Math.max(50, lastPoint.level * 1.1);
+            const maxMult = Math.max(2, lastPoint.mult * 1.1);
+
+            const getPoints = () => {
+                const width = 1000;
+                const height = 500;
+                
+                const points = data.map(p => {
+                    const x = (p.level / maxLevel) * width;
+                    const normalizedMult = (p.mult - 1) / (maxMult - 1);
+                    const y = height - (normalizedMult * height);
+                    return `${x},${y}`;
+                });
+
+                const firstX = 0;
+                const firstY = height;
+                
+                return `${firstX},${firstY} ` + points.join(' ');
+            };
+
+            const pathColor = gameState === 'CRASHED' ? 'stroke-rose-500' : 'stroke-emerald-500';
+            const areaColor = gameState === 'CRASHED' ? 'fill-rose-500/20' : 'fill-emerald-500/20';
+
+            const pointsStr = getPoints();
+            const areaPointsStr = `${pointsStr} 1000,500 0,500`;
+
+            return (
+                <div className="absolute inset-0 pointer-events-none z-0">
+                    <svg viewBox="0 0 1000 500" preserveAspectRatio="none" className="w-full h-full">
+                        {/* Grid Lines */}
+                        <line x1="0" y1="375" x2="1000" y2="375" stroke="#334155" strokeWidth="1" strokeDasharray="5,5" />
+                        <line x1="0" y1="250" x2="1000" y2="250" stroke="#334155" strokeWidth="1" strokeDasharray="5,5" />
+                        <line x1="0" y1="125" x2="1000" y2="125" stroke="#334155" strokeWidth="1" strokeDasharray="5,5" />
+                        
+                        <polyline 
+                            points={pointsStr} 
+                            fill="none" 
+                            className={`${pathColor} stroke-[4] transition-colors duration-300`} 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                        />
+                        <polygon 
+                            points={`${pointsStr} ${(data[data.length-1].level / maxLevel)*1000},500 0,500`} 
+                            className={`${areaColor} transition-colors duration-300`} 
+                        />
+                    </svg>
+                </div>
+            );
+        };
+
+        const CrashGameCreator = () => {
+            const [totalLevels, setTotalLevels] = useState(600);
+            const [targetRtp, setTargetRtp] = useState(0.96);
+            
+            const [rules, setRules] = useState([
+                { start: 0, end: 0, prob: 0.95 },
+                { start: 1, end: 600, prob: 0.99 }
+            ]);
+
+            const [levelData, setLevelData] = useState([]);
+            
+            const [gameState, setGameState] = useState('IDLE');
+            const [currentLevel, setCurrentLevel] = useState(0);
+            const [betAmount, setBetAmount] = useState(100);
+            const [payout, setPayout] = useState(0);
+            const [history, setHistory] = useState([]);
+            
+            const [gameSpeed, setGameSpeed] = useState(1);
+            const [runData, setRunData] = useState([]); 
+
+            useEffect(() => {
+                calculateTable();
+            }, [totalLevels, targetRtp, rules]);
+
+            const calculateTable = () => {
+                let data = [];
+                let currentCumProb = 1.0;
+                const sortedRules = [...rules].sort((a, b) => a.start - b.start);
+
+                for (let i = 0; i <= totalLevels; i++) {
+                    const rule = sortedRules.find(r => i >= r.start && i <= r.end) || sortedRules[sortedRules.length - 1] || { prob: 0.99 };
+                    let stepProb = rule.prob;
+                    if (i === totalLevels) stepProb = 0;
+
+                    if (i > 0) {
+                        const prevLevelData = data[i - 1];
+                        currentCumProb = prevLevelData.cumProb * prevLevelData.stepProb;
+                    }
+
+                    let multiplier = 1.0;
+                    if (i === 0) multiplier = 1.0;
+                    else multiplier = (1 / currentCumProb) * targetRtp;
+
+                    multiplier = Math.max(1, parseFloat(multiplier.toFixed(2)));
+
+                    data.push({
+                        level: i,
+                        multiplier: multiplier,
+                        stepProb: stepProb,
+                        cumProb: currentCumProb
+                    });
+                }
+                setLevelData(data);
+            };
+
+            const addRule = () => {
+                const lastRule = rules[rules.length - 1];
+                const newStart = lastRule ? lastRule.end + 1 : 0;
+                setRules([...rules, { start: newStart, end: totalLevels, prob: 0.99 }]);
+            };
+
+            const updateRule = (index, field, value) => {
+                const newRules = [...rules];
+                newRules[index][field] = parseFloat(value);
+                setRules(newRules);
+            };
+
+            const removeRule = (index) => {
+                if (rules.length > 1) {
+                    setRules(rules.filter((_, i) => i !== index));
+                }
+            };
+
+            const downloadConfig = () => {
+                const config = {
+                    gameConfig: {
+                        gameName: "Crash-Step-Ladder",
+                        version: "1.0.0",
+                        simulationRuns: 100000
+                    },
+                    mathModel: {
+                        targetRTP: targetRtp,
+                        maxLevels: totalLevels
+                    },
+                    levels: levelData.map(d => ({
+                        level: d.level,
+                        multiplier: d.multiplier,
+                        stepProbability: d.stepProb
+                    }))
+                };
+
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "config.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            };
+
+            useEffect(() => {
+                let intervalId;
+                
+                if (gameState === 'RUNNING') {
+                    const intervalMs = 100 / gameSpeed;
+                    
+                    intervalId = setInterval(() => {
+                        setCurrentLevel(prevLevel => {
+                            if (prevLevel >= totalLevels) {
+                                endGame('WIN', prevLevel);
+                                return prevLevel;
+                            }
+
+                            const currentProb = levelData[prevLevel].stepProb;
+                            const rng = Math.random();
+                            
+                            if (rng < currentProb) {
+                                return prevLevel + 1;
+                            } else {
+                                endGame('CRASH', prevLevel);
+                                return prevLevel;
+                            }
+                        });
+                    }, intervalMs);
+                }
+
+                return () => clearInterval(intervalId);
+            }, [gameState, gameSpeed, levelData, totalLevels]);
+
+            useEffect(() => {
+                if (gameState === 'RUNNING' || gameState === 'IDLE') {
+                    if (currentLevel === 0 && gameState === 'RUNNING') {
+                        setRunData([{ level: 0, mult: 1 }]);
+                    } else if (currentLevel > 0 && levelData[currentLevel]) {
+                        setRunData(prev => {
+                            const last = prev[prev.length - 1];
+                            if (last && last.level === currentLevel) return prev;
+                            return [...prev, { 
+                                level: currentLevel, 
+                                mult: levelData[currentLevel].multiplier 
+                            }];
+                        });
+                    }
+                }
+            }, [currentLevel, gameState, levelData]);
+
+            const startGame = () => {
+                if (levelData.length === 0) return;
+                setGameState('RUNNING');
+                setCurrentLevel(0);
+                setPayout(0);
+                setRunData([{ level: 0, mult: 1 }]);
+            };
+
+            const cashOut = () => {
+                if (gameState !== 'RUNNING') return;
+                endGame('CASHED', currentLevel);
+            };
+
+            const endGame = (result, finalLevel) => {
+                setGameState(result);
+                
+                let winAmt = 0;
+                let mult = 1.0;
+                
+                if (result === 'CASHED' || result === 'WIN') {
+                    mult = levelData[finalLevel].multiplier;
+                    winAmt = betAmount * mult;
+                    setPayout(winAmt);
+                } else {
+                    setPayout(0);
+                    mult = 0;
+                }
+
+                setHistory(prev => [{ result, level: finalLevel, mult: mult, win: winAmt }, ...prev].slice(0, 10));
+            };
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
+                {/* Header */}
+                <div className="bg-slate-800 p-4 border-b border-slate-700 flex justify-between items-center shadow-md shrink-0 z-20 relative">
+                    <div className="flex items-center gap-2">
+                    <div className="bg-emerald-500 p-1.5 rounded-lg">
+                        <IconRefreshCw />
+                    </div>
+                    <h1 className="text-xl font-bold">Crash Game Configurator</h1>
+                    </div>
+                    <div className="flex gap-2">
+                    <button 
+                        onClick={downloadConfig}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+                    >
+                        <IconDownload /> 下載 config.json
+                    </button>
+                    </div>
+                </div>
+
+                <div className="flex flex-1 overflow-hidden">
+                    {/* Left Sidebar: Controls & Settings */}
+                    <div className="w-1/3 min-w-[350px] bg-slate-900 border-r border-slate-700 flex flex-col overflow-y-auto z-20 relative shadow-xl">
+                        <div className="p-6 space-y-8">
+                            
+                            {/* --- Game Control Panel (Moved Here) --- */}
+                            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                                <div className="flex items-center gap-2 mb-4 border-b border-slate-700 pb-2">
+                                    <IconGamepad />
+                                    <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Game Control</h2>
+                                </div>
+                                
+                                {/* Speed Control */}
+                                <div className="flex justify-center gap-2 mb-6 bg-slate-900/50 p-1.5 rounded-lg border border-slate-700/50 inline-flex w-full">
+                                    {[1, 2, 3, 5].map(s => (
+                                        <button
+                                            key={s}
+                                            onClick={() => setGameSpeed(s)}
+                                            className={`flex-1 py-1 px-3 rounded text-xs font-bold transition-all flex items-center justify-center gap-1
+                                                ${gameSpeed === s ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}
+                                            `}
+                                        >
+                                            <IconZap /> {s}x
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="flex gap-4 mb-4">
+                                    <div className="flex-1">
+                                    <label className="text-xs text-slate-400 block mb-1">Bet Amount</label>
+                                    <div className="bg-slate-900 rounded p-3 text-white font-mono border border-slate-600">
+                                        ${betAmount}
+                                    </div>
+                                    </div>
+                                    <div className="flex-1">
+                                    <label className="text-xs text-slate-400 block mb-1">Current Win</label>
+                                    <div className={`bg-slate-900 rounded p-3 font-mono border border-slate-600 ${gameState==='RUNNING' ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                        ${(betAmount * (levelData[currentLevel]?.multiplier || 1)).toFixed(2)}
+                                    </div>
+                                    </div>
+                                </div>
+
+                                {gameState === 'RUNNING' ? (
+                                    <button 
+                                    onClick={cashOut}
+                                    className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black text-2xl py-4 rounded-lg shadow-lg shadow-yellow-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                    <IconSave /> CASH OUT
+                                    </button>
+                                ) : (
+                                    <button 
+                                    onClick={startGame}
+                                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-2xl py-4 rounded-lg shadow-lg shadow-emerald-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                    <IconPlay /> BET (Start)
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Global Settings */}
+                            <div className="space-y-4 pt-4 border-t border-slate-800">
+                            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">全局設定 (Global)</h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                <label className="block text-xs text-slate-500 mb-1">總關卡數 (Max Levels)</label>
+                                <input 
+                                    type="number" 
+                                    value={totalLevels}
+                                    onChange={(e) => setTotalLevels(Number(e.target.value))}
+                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-emerald-500 outline-none"
+                                />
+                                </div>
+                                <div>
+                                <label className="block text-xs text-slate-500 mb-1">目標 RTP (例如 0.96)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={targetRtp}
+                                    onChange={(e) => setTargetRtp(Number(e.target.value))}
+                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-emerald-500 outline-none"
+                                />
+                                </div>
+                            </div>
+                            </div>
+
+                            {/* Rules */}
+                            <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">機率區間規則 (Rules)</h2>
+                                <button onClick={addRule} className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
+                                <IconPlus /> 新增規則
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                {rules.map((rule, idx) => (
+                                <div key={idx} className="bg-slate-800 p-3 rounded border border-slate-700 flex items-center gap-2 text-sm">
+                                    <div className="flex items-center gap-2 flex-1">
+                                    <span className="text-slate-500">Lv</span>
+                                    <input 
+                                        type="number" 
+                                        value={rule.start} 
+                                        onChange={(e) => updateRule(idx, 'start', e.target.value)}
+                                        className="w-14 bg-slate-900 border border-slate-600 rounded px-1 py-0.5 text-center"
+                                    />
+                                    <span className="text-slate-500">至</span>
+                                    <input 
+                                        type="number" 
+                                        value={rule.end} 
+                                        onChange={(e) => updateRule(idx, 'end', e.target.value)}
+                                        className="w-14 bg-slate-900 border border-slate-600 rounded px-1 py-0.5 text-center"
+                                    />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                    <span className="text-slate-500">機率</span>
+                                    <input 
+                                        type="number" 
+                                        step="0.0001"
+                                        max="1"
+                                        value={rule.prob} 
+                                        onChange={(e) => updateRule(idx, 'prob', e.target.value)}
+                                        className="w-20 bg-slate-900 border border-slate-600 rounded px-1 py-0.5 text-center text-emerald-400 font-bold"
+                                    />
+                                    </div>
+                                    <button onClick={() => removeRule(idx)} className="text-slate-500 hover:text-rose-500 ml-1">
+                                    <IconTrash2 />
+                                    </button>
+                                </div>
+                                ))}
+                            </div>
+                            <p className="text-xs text-slate-500 italic">
+                                * 系統會依序檢查規則。未涵蓋的層級將繼承最後一條規則。
+                            </p>
+                            </div>
+
+                            {/* Preview */}
+                            <div className="space-y-2">
+                            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider">數據預覽 (Preview)</h2>
+                            <div className="border border-slate-700 rounded overflow-hidden">
+                                <table className="w-full text-xs text-left">
+                                <thead className="bg-slate-800 text-slate-400">
+                                    <tr>
+                                    <th className="p-2">Level</th>
+                                    <th className="p-2">Pass Prob</th>
+                                    <th className="p-2 text-right">Multiplier</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-700">
+                                    {levelData.slice(0, 5).map((d) => (
+                                    <tr key={d.level} className="bg-slate-900/50">
+                                        <td className="p-2 text-slate-300">{d.level}</td>
+                                        <td className="p-2 text-blue-400">{(d.stepProb * 100).toFixed(2)}%</td>
+                                        <td className="p-2 text-right text-emerald-400 font-mono">{d.multiplier.toFixed(2)}x</td>
+                                    </tr>
+                                    ))}
+                                    <tr><td colSpan="3" className="p-1 text-center text-slate-600">...</td></tr>
+                                    {levelData.slice(100, 103).map((d) => (
+                                    <tr key={d.level} className="bg-slate-900/50">
+                                        <td className="p-2 text-slate-300">{d.level}</td>
+                                        <td className="p-2 text-blue-400">{(d.stepProb * 100).toFixed(2)}%</td>
+                                        <td className="p-2 text-right text-emerald-400 font-mono">{d.multiplier.toFixed(2)}x</td>
+                                    </tr>
+                                    ))}
+                                    <tr><td colSpan="3" className="p-1 text-center text-slate-600">...</td></tr>
+                                    {levelData.slice(-3).map((d) => (
+                                    <tr key={d.level} className="bg-slate-900/50">
+                                        <td className="p-2 text-slate-300">{d.level}</td>
+                                        <td className="p-2 text-blue-400">{(d.stepProb * 100).toFixed(2)}%</td>
+                                        <td className="p-2 text-right text-emerald-400 font-mono">{d.multiplier.toFixed(2)}x</td>
+                                    </tr>
+                                    ))}
+                                </tbody>
+                                </table>
+                            </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Right Main Area */}
+                    <div className="flex-1 flex flex-col bg-black overflow-hidden">
+                    
+                        {/* Game Viewport */}
+                        <div className="flex-1 relative w-full h-full"> 
+                            
+                            {/* Background Grid */}
+                            <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(50,50,50,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(50,50,50,0.5)_1px,transparent_1px)] bg-[size:40px_40px] z-0"></div>
+
+                            {/* Chart */}
+                            <GameChart data={runData} gameState={gameState} />
+
+                            {/* Multiplier Display Overlay */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-8 pointer-events-none">
+                                <div className="text-center relative">
+                                    <div className={`text-8xl font-black font-mono tracking-tighter transition-all duration-75
+                                        ${gameState === 'CRASHED' ? 'text-rose-500 scale-95 blur-[1px]' : 
+                                        gameState === 'CASHED' ? 'text-yellow-400 scale-110' : 
+                                        'text-white scale-100'}
+                                    `} style={{ textShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+                                        {levelData[currentLevel]?.multiplier.toFixed(2)}x
+                                    </div>
+                                    
+                                    <div className="text-xl text-slate-300 font-mono mt-2 bg-black/30 px-4 py-1 rounded-full backdrop-blur-sm inline-block">
+                                        LEVEL {currentLevel} / {totalLevels}
+                                    </div>
+
+                                    {gameState === 'CRASHED' && (
+                                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-rose-600 text-white px-4 py-1 rounded font-bold animate-bounce whitespace-nowrap shadow-lg">
+                                        CRASHED!
+                                        </div>
+                                    )}
+                                    {gameState === 'CASHED' && (
+                                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-yellow-600 text-white px-4 py-1 rounded font-bold animate-bounce whitespace-nowrap shadow-lg">
+                                        YOU WON ${payout.toFixed(2)}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* History */}
+                        <div className="h-16 bg-slate-900 border-t border-slate-700 flex items-center px-4 overflow-x-auto gap-2 z-20 shrink-0 relative shadow-[0_-5px_15px_rgba(0,0,0,0.3)]">
+                            <span className="text-xs text-slate-500 font-bold mr-2 uppercase">History</span>
+                            {history.map((h, i) => (
+                            <div key={i} className={`
+                                px-3 py-1 rounded text-sm font-mono font-bold whitespace-nowrap
+                                ${h.result === 'CRASHED' ? 'bg-rose-900/50 text-rose-500 border border-rose-800' : 'bg-emerald-900/50 text-emerald-400 border border-emerald-800'}
+                            `}>
+                                {h.mult ? h.mult.toFixed(2) : '0.00'}x
+                            </div>
+                            ))}
+                        </div>
+
+                    </div>
+                </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<CrashGameCreator />);
+    </script>
+</body>
+</html>
