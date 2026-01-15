@@ -277,19 +277,62 @@
                 endGame('CASHED', currentLevel);
             };
 
+            // 模擬剩餘關卡，找出理論上的崩盤點
+            const simulateCrashPoint = (startLevel) => {
+                let lvl = startLevel;
+                const maxLvl = parseInt(totalLevels);
+                
+                while (lvl < maxLvl) {
+                    if (!levelData[lvl]) break;
+                    
+                    const prob = levelData[lvl].stepProb;
+                    if (Math.random() < prob) {
+                        lvl++;
+                    } else {
+                        return lvl; // 在此層崩盤
+                    }
+                }
+                return lvl; // 破台
+            };
+
             const endGame = (result, finalLevel) => {
                 setGameState(result);
+                
                 let winAmt = 0;
-                let mult = 1.0;
-                if (result === 'CASHED' || result === 'WIN') {
-                    mult = levelData[finalLevel].multiplier;
-                    winAmt = betAmount * mult;
+                let cashoutMult = null; // 玩家實際拿到的倍率
+                let crashMult = null;   // 遊戲實際(或理論)崩盤倍率
+                
+                if (result === 'CASHED') {
+                    // 玩家逃生成功
+                    cashoutMult = levelData[finalLevel].multiplier;
+                    winAmt = betAmount * cashoutMult;
                     setPayout(winAmt);
+                    
+                    // 模擬如果不逃生會死在哪
+                    const crashLevel = simulateCrashPoint(finalLevel);
+                    // 如果 crashLevel 超出範圍 (Win)，則用最後一關倍率
+                    crashMult = levelData[crashLevel] ? levelData[crashLevel].multiplier : levelData[levelData.length - 1].multiplier;
+                    if (crashLevel >= parseInt(totalLevels)) crashMult = "WIN";
+
+                } else if (result === 'WIN') {
+                    // 玩家通關
+                    cashoutMult = levelData[finalLevel].multiplier;
+                    winAmt = betAmount * cashoutMult;
+                    setPayout(winAmt);
+                    crashMult = "WIN";
                 } else {
+                    // 玩家崩盤
                     setPayout(0);
-                    mult = 0;
+                    // 崩盤顯示的倍率即為該層倍率
+                    crashMult = levelData[finalLevel].multiplier;
                 }
-                setHistory(prev => [{ result, level: finalLevel, mult: mult, win: winAmt }, ...prev].slice(0, 10));
+
+                setHistory(prev => [{ 
+                    result, 
+                    cashoutMult, 
+                    crashMult, 
+                    win: winAmt 
+                }, ...prev].slice(0, 10));
             };
 
             return (
@@ -545,10 +588,17 @@
                             <span className="text-xs text-slate-500 font-bold mr-2 uppercase">History</span>
                             {history.map((h, i) => (
                             <div key={i} className={`
-                                px-3 py-1 rounded text-sm font-mono font-bold whitespace-nowrap
+                                px-3 py-1 rounded text-sm font-mono font-bold whitespace-nowrap flex flex-col items-center justify-center leading-tight min-w-[80px]
                                 ${h.result === 'CRASHED' ? 'bg-rose-900/50 text-rose-500 border border-rose-800' : 'bg-emerald-900/50 text-emerald-400 border border-emerald-800'}
                             `}>
-                                {h.mult ? h.mult.toFixed(2) : '0.00'}x
+                                {h.result === 'CASHED' ? (
+                                    <>
+                                        <span className="text-[10px] text-slate-400">Crash {typeof h.crashMult === 'number' ? h.crashMult.toFixed(2) : h.crashMult}x</span>
+                                        <span className="text-white">{h.cashoutMult.toFixed(2)}x</span>
+                                    </>
+                                ) : (
+                                    <span>{typeof h.crashMult === 'number' ? h.crashMult.toFixed(2) : h.crashMult}x</span>
+                                )}
                             </div>
                             ))}
                         </div>
