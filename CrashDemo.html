@@ -44,6 +44,8 @@
         const IconRefreshCw = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>;
         const IconZap = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>;
         const IconGamepad = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="15" y1="13" x2="15.01" y2="13"></line><line x1="18" y1="11" x2="18.01" y2="11"></line><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>;
+        const IconCalculator = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="16" y1="14" x2="16" y2="18"></line><path d="M16 10h.01"></path><path d="M12 10h.01"></path><path d="M8 10h.01"></path><path d="M12 14h.01"></path><path d="M8 14h.01"></path><path d="M12 18h.01"></path><path d="M8 18h.01"></path></svg>;
+        const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>;
 
         // --- Chart Component ---
         const GameChart = ({ data, gameState }) => {
@@ -74,7 +76,6 @@
             const areaColor = gameState === 'CRASHED' ? 'fill-rose-500/20' : 'fill-emerald-500/20';
 
             const pointsStr = getPoints();
-            const areaPointsStr = `${pointsStr} 1000,500 0,500`;
 
             return (
                 <div className="absolute inset-0 pointer-events-none z-0">
@@ -104,6 +105,7 @@
             const [totalLevels, setTotalLevels] = useState(600);
             const [targetRtp, setTargetRtp] = useState(0.96);
             
+            // 規則設定: 初始狀態可以是數字，輸入時會轉為字串以方便小數點輸入
             const [rules, setRules] = useState([
                 { start: 0, end: 0, prob: 0.95 },
                 { start: 1, end: 600, prob: 0.99 }
@@ -119,20 +121,39 @@
             
             const [gameSpeed, setGameSpeed] = useState(1);
             const [runData, setRunData] = useState([]); 
+            const [isCalculating, setIsCalculating] = useState(false);
 
             useEffect(() => {
                 calculateTable();
-            }, [totalLevels, targetRtp, rules]);
+            }, []);
 
             const calculateTable = () => {
+                setIsCalculating(true);
+                setTimeout(() => setIsCalculating(false), 1000); // UI Feedback reset
+
                 let data = [];
                 let currentCumProb = 1.0;
-                const sortedRules = [...rules].sort((a, b) => a.start - b.start);
+                
+                // 1. 先將規則字串轉回數字進行排序與運算
+                const parsedRules = rules.map(r => ({
+                    start: parseInt(r.start) || 0,
+                    end: parseInt(r.end) || 0,
+                    prob: parseFloat(r.prob)
+                })).sort((a, b) => a.start - b.start);
 
-                for (let i = 0; i <= totalLevels; i++) {
-                    const rule = sortedRules.find(r => i >= r.start && i <= r.end) || sortedRules[sortedRules.length - 1] || { prob: 0.99 };
-                    let stepProb = rule.prob;
-                    if (i === totalLevels) stepProb = 0;
+                const maxLvl = parseInt(totalLevels) || 600;
+                const rtp = parseFloat(targetRtp) || 0.96;
+
+                for (let i = 0; i <= maxLvl; i++) {
+                    // 尋找匹配規則
+                    const rule = parsedRules.find(r => i >= r.start && i <= r.end) || parsedRules[parsedRules.length - 1];
+                    
+                    let stepProb = 0.99; // 預設值
+                    if (rule && !isNaN(rule.prob)) {
+                        stepProb = rule.prob;
+                    }
+
+                    if (i === maxLvl) stepProb = 0;
 
                     if (i > 0) {
                         const prevLevelData = data[i - 1];
@@ -141,7 +162,7 @@
 
                     let multiplier = 1.0;
                     if (i === 0) multiplier = 1.0;
-                    else multiplier = (1 / currentCumProb) * targetRtp;
+                    else multiplier = (1 / currentCumProb) * rtp;
 
                     multiplier = Math.max(1, parseFloat(multiplier.toFixed(2)));
 
@@ -157,13 +178,16 @@
 
             const addRule = () => {
                 const lastRule = rules[rules.length - 1];
-                const newStart = lastRule ? lastRule.end + 1 : 0;
+                // 確保 start/end 轉為數字再運算
+                const lastEnd = parseInt(lastRule ? lastRule.end : 0);
+                const newStart = lastEnd + 1;
                 setRules([...rules, { start: newStart, end: totalLevels, prob: 0.99 }]);
             };
 
+            // 優化後的更新函數：直接儲存輸入值 (字串)，不強制 parseFloat，避免小數點無法輸入
             const updateRule = (index, field, value) => {
                 const newRules = [...rules];
-                newRules[index][field] = parseFloat(value);
+                newRules[index][field] = value;
                 setRules(newRules);
             };
 
@@ -181,8 +205,8 @@
                         simulationRuns: 100000
                     },
                     mathModel: {
-                        targetRTP: targetRtp,
-                        maxLevels: totalLevels
+                        targetRTP: parseFloat(targetRtp),
+                        maxLevels: parseInt(totalLevels)
                     },
                     levels: levelData.map(d => ({
                         level: d.level,
@@ -202,21 +226,16 @@
 
             useEffect(() => {
                 let intervalId;
-                
                 if (gameState === 'RUNNING') {
                     const intervalMs = 100 / gameSpeed;
-                    
                     intervalId = setInterval(() => {
                         setCurrentLevel(prevLevel => {
-                            if (prevLevel >= totalLevels) {
+                            if (prevLevel >= parseInt(totalLevels)) {
                                 endGame('WIN', prevLevel);
                                 return prevLevel;
                             }
-
                             const currentProb = levelData[prevLevel].stepProb;
-                            const rng = Math.random();
-                            
-                            if (rng < currentProb) {
+                            if (Math.random() < currentProb) {
                                 return prevLevel + 1;
                             } else {
                                 endGame('CRASH', prevLevel);
@@ -225,7 +244,6 @@
                         });
                     }, intervalMs);
                 }
-
                 return () => clearInterval(intervalId);
             }, [gameState, gameSpeed, levelData, totalLevels]);
 
@@ -261,10 +279,8 @@
 
             const endGame = (result, finalLevel) => {
                 setGameState(result);
-                
                 let winAmt = 0;
                 let mult = 1.0;
-                
                 if (result === 'CASHED' || result === 'WIN') {
                     mult = levelData[finalLevel].multiplier;
                     winAmt = betAmount * mult;
@@ -273,7 +289,6 @@
                     setPayout(0);
                     mult = 0;
                 }
-
                 setHistory(prev => [{ result, level: finalLevel, mult: mult, win: winAmt }, ...prev].slice(0, 10));
             };
 
@@ -298,11 +313,11 @@
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">
-                    {/* Left Sidebar: Controls & Settings */}
+                    {/* Left Sidebar */}
                     <div className="w-1/3 min-w-[350px] bg-slate-900 border-r border-slate-700 flex flex-col overflow-y-auto z-20 relative shadow-xl">
                         <div className="p-6 space-y-8">
                             
-                            {/* --- Game Control Panel (Moved Here) --- */}
+                            {/* Game Control Panel */}
                             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                                 <div className="flex items-center gap-2 mb-4 border-b border-slate-700 pb-2">
                                     <IconGamepad />
@@ -365,7 +380,7 @@
                                 <input 
                                     type="number" 
                                     value={totalLevels}
-                                    onChange={(e) => setTotalLevels(Number(e.target.value))}
+                                    onChange={(e) => setTotalLevels(e.target.value)}
                                     className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-emerald-500 outline-none"
                                 />
                                 </div>
@@ -375,7 +390,7 @@
                                     type="number" 
                                     step="0.01"
                                     value={targetRtp}
-                                    onChange={(e) => setTargetRtp(Number(e.target.value))}
+                                    onChange={(e) => setTargetRtp(e.target.value)}
                                     className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-emerald-500 outline-none"
                                 />
                                 </div>
@@ -427,9 +442,17 @@
                                 </div>
                                 ))}
                             </div>
-                            <p className="text-xs text-slate-500 italic">
-                                * 系統會依序檢查規則。未涵蓋的層級將繼承最後一條規則。
-                            </p>
+                            
+                            {/* Manual Calculate Button */}
+                            <button 
+                                onClick={calculateTable}
+                                className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all
+                                    ${isCalculating ? 'bg-emerald-600 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}
+                                `}
+                            >
+                                {isCalculating ? <IconCheck /> : <IconCalculator />}
+                                {isCalculating ? '已更新！' : '重新計算 / 套用設定'}
+                            </button>
                             </div>
 
                             {/* Preview */}
